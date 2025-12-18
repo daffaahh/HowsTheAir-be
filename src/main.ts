@@ -12,6 +12,12 @@ async function bootstrap() {
     transform: true, // Otomatis transform payload ke instance DTO
   }));
 
+  app.enableCors({
+    origin: '*', // Nanti ganti dengan URL Frontend kamu kalau sudah deploy
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
+
   // --- SETUP SWAGGER MULAI ---
   const config = new DocumentBuilder()
     .setTitle('HowsTheAir API')
@@ -23,7 +29,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document); 
 
-  app.enableCors(); // Jangan lupa CORS biar FE bisa akses
+  // app.enableCors(); // Jangan lupa CORS biar FE bisa akses
   await app.listen(3333);
 }
 bootstrap();
