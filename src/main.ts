@@ -18,16 +18,27 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // --- SETUP SWAGGER MULAI ---
+// --- CONFIG SWAGGER (VERCEL FRIENDLY) ---
   const config = new DocumentBuilder()
     .setTitle('HowsTheAir API')
     .setDescription('Dokumentasi API untuk Tes Dashboard Analitik')
     .setVersion('1.0')
-    .addTag('Air Quality') // Optional: biar rapi
+    .addTag('Air Quality')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document); 
+  SwaggerModule.setup('api', app, document, {
+      customSiteTitle: 'HTA API Docs',
+      customJs: [
+        'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui-bundle.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui-standalone-preset.min.js',
+      ],
+      customCssUrl: [
+        'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui.min.css',
+        'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui-standalone-preset.min.css',
+        'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui.css',
+      ],
+    });
 
   // app.enableCors(); // Jangan lupa CORS biar FE bisa akses
   await app.listen(3333);
