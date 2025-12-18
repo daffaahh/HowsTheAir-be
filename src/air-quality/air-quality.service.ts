@@ -111,93 +111,77 @@ async getRealtimeAirQuality() {
 
 
 async syncData() {
-    this.logger.log('Starting Sync Process...');
+  const cities = await this.prisma.monitoredCity.findMany({ where: { isActive: true } });
+  let successCount = 0;
+
+  for (const city of cities) {
+    const url = `https://api.waqi.info/feed/${city.keyword}/?token=${this.WAQI_TOKEN}`;
     
-    // 1. Ambil daftar kota yang STATUS-nya ACTIVE dari Database
-    const cities = await this.prisma.monitoredCity.findMany({
-      where: { isActive: true },
-    });
-
-    if (cities.length === 0) {
-      this.logger.warn('No active cities found to monitor.');
-      return { message: 'No cities to sync', syncedCount: 0 };
-    }
-
-    let successCount = 0;
-
     try {
-      // Loop berdasarkan data database
-      for (const city of cities) {
-        
-        // Gunakan 'city.keyword' untuk URL API
-        const url = `https://api.waqi.info/feed/${city.keyword}/?token=${this.WAQI_TOKEN}`;        
-        
-        try {
-          const response = await lastValueFrom(this.httpService.get(url));
-          const data = response.data.data;
+      const response = await lastValueFrom(this.httpService.get(url));
+      const data = response.data.data;
 
-          if (response.data.status === 'ok') {
-            const category = this.determineCategory(data.aqi);
-            
-            // Konversi string ISO ke Date Object
-            // Pastikan formatnya valid. API WAQI kadang return "time": { "s": ... }
-            const recordDate = new Date(data.time.iso); 
+      if (response.data.status === 'ok') {
+        const category = this.determineCategory(data.aqi);
+        const recordDate = new Date(data.time.iso);
 
-            // Upsert ke Database
-            await this.prisma.airQuality.upsert({
-              where: {
-                stationName_recordedAt: {
-                  stationName: data.city.name, // Nama stasiun dari API
-                  recordedAt: recordDate,
-                },
-              },
-              update: {
-                aqi: data.aqi,
-                category: category,
-                lastSynced: new Date(),
-                // Update relasi juga (optional, jaga-jaga)
-                monitoredCityId: city.id, 
-              },
-              create: {
-                stationName: data.city.name,
-                aqi: data.aqi,
-                category: category,
+        // Gunakan Transaction untuk update dua tabel sekaligus
+        await this.prisma.$transaction([
+          // 1. Update Current Data (Tabel Utama)
+          // Selalu update ke data terbaru dari API
+          this.prisma.airQuality.upsert({
+            where: { monitoredCityId: city.id },
+            update: {
+              stationName: data.attributions[0].name,
+              aqi: data.aqi,
+              category: category,
+              recordedAt: recordDate,
+              lastSynced: new Date(),
+            },
+            create: {
+              monitoredCityId: city.id,
+              stationName: data.attributions[0].name,
+              aqi: data.aqi,
+              category: category,
+              recordedAt: recordDate,
+            },
+          }),
+
+          // 2. Insert ke History
+          // Upsert di sini gunanya: jika data dengan jam yang sama sudah ada, jangan insert lagi (hindari duplikasi) 
+          this.prisma.airQualityHistory.upsert({
+            where: {
+              monitoredCityId_recordedAt: {
+                monitoredCityId: city.id,
                 recordedAt: recordDate,
-                lastSynced: new Date(),
-                
-                // PENTING: Sambungkan ke ID Kota di Database kita
-                monitoredCity: {
-                  connect: { id: city.id }
-                }
               },
-            });
-            successCount++;
-          } else {
-             this.logger.warn(`Failed to fetch data for ${city.name}: ${response.data.data}`);
-          }
-        } catch (cityError) {
-          // Kalau 1 kota error, jangan stop loop kota lain
-          this.logger.error(`Error processing city ${city.name}`, cityError);
-        }
+            },
+            update: {}, // Jika sudah ada, tidak perlu update apa-apa
+            create: {
+              monitoredCityId: city.id,
+              aqi: data.aqi,
+              category: category,
+              recordedAt: recordDate,
+            },
+          }),
+        ]);
+
+        successCount++;
       }
-
-      // Log Sukses Global
-      await this.prisma.auditLog.create({
-        data: { action: 'SYNC', status: 'SUCCESS', details: `Berhasil sync ${successCount} data` }
-      });
-
-      return { message: 'Sync completed', syncedCount: successCount };
-
-    } catch (error) {
-      this.logger.error('Sync Fatal Error', error);
-      await this.prisma.auditLog.create({
-        data: { action: 'SYNC', status: 'FAILED', details: `Sync Error: ${error.message}` }
-      });
-      throw error;
+    } catch (cityError) {
+      this.logger.error(`Error sync ${city.name}: ${cityError.message}`);
     }
   }
 
-  // --- LOGIC 2: READ DATA (Untuk Tabel & Dashboard) ---
+  // Catat Audit Log untuk fitur 'last sync time' [cite: 19]
+  await this.prisma.auditLog.create({
+    data: { action: 'SYNC', status: 'SUCCESS', details: `Synced ${successCount} cities` }
+  });
+
+  return { message: 'Sync success', count: successCount };
+}
+
+// --- LOGIC 2: READ DATA (Untuk Tabel & Dashboard) ---
   async findAll(query: any) {
     const { startDate, endDate, search } = query;
     const whereClause: Prisma.AirQualityWhereInput = {};

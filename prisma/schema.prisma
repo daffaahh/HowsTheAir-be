@@ -13,19 +13,26 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Tabel Data Utama
 model AirQuality {
-  id                Int               @id @default(autoincrement())
-  stationName       String            // Nama stasiun/lokasi
-  monitoredCityId   Int?              // Bikin nullable dulu kalau data lama mau dipertahankan
-  monitoredCity     MonitoredCity?    @relation(fields: [monitoredCityId], references: [id])
-  aqi               Int               // Nilai index
-  category          String            // Good, Moderate, etc.
-  recordedAt        DateTime          // Waktu data diambil dari API
-  lastSynced        DateTime          @default(now()) @updatedAt // Otomatis update waktu sync
-  
-  // Kombinasi ini biar gak ada data stasiun yg sama di jam yg sama
-  @@unique([stationName, recordedAt])
+  id                Int                @id @default(autoincrement())
+  stationName       String            
+  monitoredCityId   Int                @unique // WAJIB UNIQUE: satu kota cuma punya 1 data terbaru
+  aqi               Int               
+  category          String            
+  recordedAt        DateTime          
+  lastSynced        DateTime          @default(now()) @updatedAt
+}
+
+model AirQualityHistory {
+  id              Int      @id @default(autoincrement())
+  monitoredCityId Int       
+  aqi             Int
+  category        String
+  recordedAt      DateTime
+  SyncedAt        DateTime @default(now())
+
+  // UNIQUE: Mencegah data stasiun yang sama di jam yang sama masuk dua kali ke history 
+  @@unique([monitoredCityId, recordedAt])
 }
 
 // For Check SYNC, get from here
@@ -44,7 +51,4 @@ model MonitoredCity {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  // 4. Relasi ke tabel History (AirQuality)
-  airQualities AirQuality[] 
 }
