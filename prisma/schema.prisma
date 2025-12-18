@@ -1,0 +1,50 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Tabel Data Utama
+model AirQuality {
+  id                Int               @id @default(autoincrement())
+  stationName       String            // Nama stasiun/lokasi
+  monitoredCityId   Int?              // Bikin nullable dulu kalau data lama mau dipertahankan
+  monitoredCity     MonitoredCity?    @relation(fields: [monitoredCityId], references: [id])
+  aqi               Int               // Nilai index
+  category          String            // Good, Moderate, etc.
+  recordedAt        DateTime          // Waktu data diambil dari API
+  lastSynced        DateTime          @default(now()) @updatedAt // Otomatis update waktu sync
+  
+  // Kombinasi ini biar gak ada data stasiun yg sama di jam yg sama
+  @@unique([stationName, recordedAt])
+}
+
+// For Check SYNC, get from here
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  action      String   // 'SYNC', 'CREATE', 'UPDATE', 'DELETE'
+  details     String?  // Misal: "Synced 5 cities" atau "Deleted ID 4"
+  status      String   // 'SUCCESS', 'FAILED'
+  performedAt DateTime @default(now())
+}
+
+model MonitoredCity {
+  id        Int      @id @default(autoincrement())
+  name      String   
+  keyword   String   @unique 
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 4. Relasi ke tabel History (AirQuality)
+  airQualities AirQuality[] 
+}
