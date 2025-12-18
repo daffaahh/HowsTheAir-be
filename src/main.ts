@@ -22,8 +22,6 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document); 
-  // 'api' adalah URL path-nya nanti (localhost:3000/api)
-  // --- SETUP SWAGGER SELESAI ---
 
   app.enableCors(); // Jangan lupa CORS biar FE bisa akses
   await app.listen(3333);
