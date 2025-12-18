@@ -12,15 +12,15 @@ export class AirQualityController {
     return this.airQualityService.syncData();
   }
 
-  @Post('sync-test')
-  syncDataTest() {
-    return this.airQualityService.getRealtimeAirQuality();
-  }
-
   // Ambil Data Tabel (Bisa difilter)
   @Get()
   findAll(@Query() query: any) {
     return this.airQualityService.findAll(query);
+  }
+
+  @Get('history')
+  getHistory(@Query() query: any) {
+    return this.airQualityService.findHistory(query);
   }
 
   // Ambil Info Last Sync

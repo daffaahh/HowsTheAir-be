@@ -13,7 +13,7 @@ export class CitiesService {
 
   // 1. Create New City
   async create(createCityDto: CreateCityDto) {
-    const { name, keyword } = createCityDto;
+    const { stationName, keyword } = createCityDto;
 
     // Validasi ke API WAQI dulu sebelum simpan
     const url = `https://api.waqi.info/feed/${keyword}/?token=${process.env.WAQI_TOKEN}`;
@@ -27,7 +27,7 @@ export class CitiesService {
     }
 
     return this.prisma.monitoredCity.create({
-      data: { name, keyword, isActive: true },
+      data: { stationName, keyword, isActive: true },
     });
   }
 

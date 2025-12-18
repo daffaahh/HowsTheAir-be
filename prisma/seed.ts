@@ -19,9 +19,9 @@ async function main() {
     // 1. Upsert Kota
     const dbCity = await prisma.monitoredCity.upsert({
       where: { keyword: city.keyword },
-      update: { name: city.name }, // Update nama biar rapi
+      update: { stationName: city.name }, // Update nama biar rapi
       create: {
-        name: city.name,
+        stationName: city.name,
         keyword: city.keyword,
         isActive: true,
       },

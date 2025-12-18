@@ -8,7 +8,7 @@ export class CreateCityDto {
   })
   @IsString()
   @IsNotEmpty()
-  name: string; 
+  stationName: string; 
 
   @ApiProperty({
     example: 'jakarta', // <--- Ini yang muncul di Swagger

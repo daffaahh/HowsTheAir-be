@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,42 +7,54 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model AirQuality {
-  id                Int                @id @default(autoincrement())
-  stationName       String            
-  monitoredCityId   Int                @unique // WAJIB UNIQUE: satu kota cuma punya 1 data terbaru
-  aqi               Int               
-  category          String            
-  recordedAt        DateTime          
-  lastSynced        DateTime          @default(now()) @updatedAt
+// Master Data: Daftar Stasiun yang dipantau
+model MonitoredCity {
+  id          Int      @id @default(autoincrement())
+  stationName String   // Dulu 'name', sekarang jadi label stasiun
+  keyword     String   @unique // UID/Keyword untuk API WAQI
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relasi: Satu stasiun punya 1 data terkini, dan banyak history
+  currentAirQuality AirQuality? 
+  history           AirQualityHistory[]
 }
 
-model AirQualityHistory {
-  id              Int      @id @default(autoincrement())
-  monitoredCityId Int       
+// Data Snapshot: Hanya menyimpan state TERAKHIR (Real-time)
+model AirQuality {
+  id              Int           @id @default(autoincrement())
+  // stationName DIHAPUS, kita ambil dari relasi monitoredCity
+  
+  monitoredCityId Int           @unique // Foreign Key & Unique (1-to-1)
+  monitoredCity   MonitoredCity @relation(fields: [monitoredCityId], references: [id])
+  
   aqi             Int
   category        String
   recordedAt      DateTime
-  SyncedAt        DateTime @default(now())
+  lastSynced      DateTime      @default(now()) @updatedAt
+}
 
-  // UNIQUE: Mencegah data stasiun yang sama di jam yang sama masuk dua kali ke history 
+// Data History: Log perjalanan kualitas udara (Time-series)
+model AirQualityHistory {
+  id              Int           @id @default(autoincrement())
+  
+  monitoredCityId Int           // Foreign Key (Bisa banyak record)
+  monitoredCity   MonitoredCity @relation(fields: [monitoredCityId], references: [id])
+  
+  aqi             Int
+  category        String
+  recordedAt      DateTime
+  SyncedAt        DateTime      @default(now())
+
+  // Mencegah duplikasi history di jam yang sama untuk kota yang sama
   @@unique([monitoredCityId, recordedAt])
 }
 
-// For Check SYNC, get from here
 model AuditLog {
   id          Int      @id @default(autoincrement())
-  action      String   // 'SYNC', 'CREATE', 'UPDATE', 'DELETE'
-  details     String?  // Misal: "Synced 5 cities" atau "Deleted ID 4"
-  status      String   // 'SUCCESS', 'FAILED'
+  action      String   
+  details     String?  
+  status      String   
   performedAt DateTime @default(now())
-}
-
-model MonitoredCity {
-  id        Int      @id @default(autoincrement())
-  name      String   
-  keyword   String   @unique 
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
