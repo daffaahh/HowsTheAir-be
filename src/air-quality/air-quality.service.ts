@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { lastValueFrom } from 'rxjs';
 import { Prisma } from '@prisma/client';
 import { AirQualityResult, WaqiApiResponse } from './dto/update-air-quality.dto';
