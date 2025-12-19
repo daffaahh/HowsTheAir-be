@@ -163,24 +163,31 @@ private readonly logger = new Logger(AirQualityService.name);
     return 'Hazardous';
   }
 
-  async findHistory(query: { startDate?: string; endDate?: string }) {
-    const { startDate, endDate } = query;
+  async findHistory(query: { startDate?: string; endDate?: string; cityId?: string }) {
+    const { startDate, endDate, cityId } = query;
     
-    // 1. Base Filter: Hanya ambil data dari stasiun yang AKTIF
     const whereClause: Prisma.AirQualityHistoryWhereInput = {
+      // Base: Defaultnya ambil yang active, TAPI jika user minta spesifik ID (history view), 
+      // kita bisa abaikan status active/inactive atau tetap enforce. 
+      // Di sini kita tetap enforce active stasiun.
       monitoredCity: {
         isActive: true 
       }
     };
 
-    // 2. Logic Filter Tanggal
+    // --- LOGIC BARU: Filter by Specific City ID ---
+    if (cityId) {
+      whereClause.monitoredCityId = Number(cityId); // Pastikan convert ke Number
+    }
+
+    // Logic Date Filter (Tetap sama)
     if (startDate && endDate) {
       whereClause.recordedAt = {
-        gte: new Date(startDate), // >= Start Date
-        lte: new Date(endDate),   // <= End Date
+        gte: new Date(startDate),
+        lte: new Date(endDate),
       };
     } else {
-      // Default: Jika tidak ada filter, ambil 30 hari terakhir
+      // Default 30 hari (Tetap sama)
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       
@@ -192,12 +199,12 @@ private readonly logger = new Logger(AirQualityService.name);
     return this.prisma.airQualityHistory.findMany({
       where: whereClause,
       include: {
-        monitoredCity: true, // Sertakan info stasiun
+        monitoredCity: true,
       },
+      // Sort Descending (Terbaru paling atas) lebih enak dibaca untuk list history
       orderBy: {
-        recordedAt: 'asc', // Urutkan Lama -> Baru (Penting untuk Grafik Garis/Bar)
+        recordedAt: 'desc', 
       },
     });
   }
-
 }
