@@ -17,92 +17,98 @@ private readonly logger = new Logger(AirQualityService.name);
     private httpService: HttpService,
   ) {}
 
-async syncData() {
-  // 1. Ambil list stasiun aktif
-  const stations = await this.prisma.monitoredCity.findMany({
-    where: { isActive: true },
-  });
+  async syncData() {
+    // 1. Ambil list stasiun aktif
+    const stations = await this.prisma.monitoredCity.findMany({
+      where: { isActive: true },
+    });
 
-  if (stations.length === 0) return { message: 'No active stations', syncedCount: 0 };
+    if (stations.length === 0) return { message: 'No active stations', syncedCount: 0 };
 
-  let successCount = 0;
+    let successCount = 0;
 
-  for (const station of stations) {
-    const url = `https://api.waqi.info/feed/${station.keyword}/?token=${this.WAQI_TOKEN}`;
-    
-    try {
-      const response = await lastValueFrom(this.httpService.get(url));
-      
-      if (response.data.status === 'ok') {
-        const data = response.data.data;
-        const category = this.determineCategory(data.aqi);
-        const recordDate = new Date(data.time.iso); 
+    for (const station of stations) {
+      // const url = `https://api.waqi.info/feed/${station.keyword}/?token=${this.WAQI_TOKEN}`;
+      const url = `https://api.waqi.info/feed/@${station.uid}/?token=${this.WAQI_TOKEN}`;
 
-        // TRANSACTION: Double Upsert
-        await this.prisma.$transaction([
-          
-          // A. Upsert ke AirQuality (Snapshot)
-          // HAPUS 'stationName' dari sini karena kolomnya sudah tidak ada di schema
-          this.prisma.airQuality.upsert({
-            where: { monitoredCityId: station.id }, 
-            update: {
-              aqi: data.aqi,
-              category: category,
-              recordedAt: recordDate,
-              lastSynced: new Date(),
-            },
-            create: {
-              monitoredCityId: station.id,
-              aqi: data.aqi,
-              category: category,
-              recordedAt: recordDate,
-            },
-          }),
+      try {
+        const response = await lastValueFrom(this.httpService.get(url));
+        
+        if (response.data.status === 'ok') {
+          const data = response.data.data;
+          const category = this.determineCategory(data.aqi);
+          const recordDate = new Date(data.time.iso); 
 
-          // B. Upsert ke History (Log)
-          // Tetap gunakan logic unique constraints untuk hindari duplikasi [cite: 18]
-          this.prisma.airQualityHistory.upsert({
-            where: {
-              monitoredCityId_recordedAt: { 
+          // TRANSACTION: Double Upsert
+          await this.prisma.$transaction([
+            
+            // A. Upsert ke AirQuality (Snapshot)
+            // HAPUS 'stationName' dari sini karena kolomnya sudah tidak ada di schema
+            this.prisma.airQuality.upsert({
+              where: { monitoredCityId: station.id }, 
+              update: {
+                aqi: data.aqi,
+                category: category,
+                recordedAt: recordDate,
+                lastSynced: new Date(),
+              },
+              create: {
                 monitoredCityId: station.id,
+                aqi: data.aqi,
+                category: category,
                 recordedAt: recordDate,
               },
-            },
-            update: {}, 
-            create: {
-              monitoredCityId: station.id,
-              aqi: data.aqi,
-              category: category,
-              recordedAt: recordDate,
-            },
-          }),
-        ]);
+            }),
 
-        successCount++;
-      } 
-    } catch (error) {
-      this.logger.error(`Error syncing ${station.stationName}`, error);
+            // B. Upsert ke History (Log)
+            // Tetap gunakan logic unique constraints untuk hindari duplikasi [cite: 18]
+            this.prisma.airQualityHistory.upsert({
+              where: {
+                monitoredCityId_recordedAt: { 
+                  monitoredCityId: station.id,
+                  recordedAt: recordDate,
+                },
+              },
+              update: {}, 
+              create: {
+                monitoredCityId: station.id,
+                aqi: data.aqi,
+                category: category,
+                recordedAt: recordDate,
+              },
+            }),
+          ]);
+
+          successCount++;
+        } 
+      } catch (error) {
+        this.logger.error(`Error syncing ${station.stationName}`, error);
+      }
     }
+
+    // Log hasil sync
+    await this.prisma.auditLog.create({
+      data: { 
+        action: 'SYNC', 
+        status: 'SUCCESS', 
+        details: `Synced ${successCount} stations. Last sync logic updated.` 
+      }
+    });
+
+    return { syncedCount: successCount };
   }
 
-  // Log hasil sync
-  await this.prisma.auditLog.create({
-    data: { 
-      action: 'SYNC', 
-      status: 'SUCCESS', 
-      details: `Synced ${successCount} stations. Last sync logic updated.` 
-    }
-  });
-
-  return { syncedCount: successCount };
-}
-
-// --- LOGIC 2: READ DATA (Untuk Tabel & Dashboard) ---
   async findAll(query: any) {
     const { startDate, endDate, search } = query;
-    const whereClause: Prisma.AirQualityWhereInput = {};
+    
+    // 1. Base Condition: HANYA ambil data dari stasiun yang AKTIF
+    const whereClause: Prisma.AirQualityWhereInput = {
+      monitoredCity: {
+        isActive: true
+      }
+    };
 
-    // Filter Tanggal (Wajib buat Dashboard)
+    // 2. Filter Tanggal (Jika ada)
     if (startDate && endDate) {
       whereClause.recordedAt = {
         gte: new Date(startDate),
@@ -110,17 +116,32 @@ async syncData() {
       };
     }
 
-    // Pencarian (Search by Station Name)
-    // if (search) {
-    //   whereClause.stationName = { contains: search, mode: 'insensitive' };
-    // }
+    // 3. Filter Search (Server-side)
+    if (search) {
+      // Note: Prisma akan menganggap kondisi di atas (isActive) AND kondisi di bawah (OR)
+      whereClause.OR = [
+        {
+          monitoredCity: {
+            stationName: { contains: search, mode: 'insensitive' },
+          },
+        },
+        {
+          monitoredCity: {
+            keyword: { contains: search, mode: 'insensitive' },
+          },
+        },
+        {
+          category: { contains: search, mode: 'insensitive' },
+        },
+      ];
+    }
 
     return this.prisma.airQuality.findMany({
       include: {
-        monitoredCity: true, // INI WAJIB: Agar frontend dapat 'stationName'
+        monitoredCity: true,
       },
       where: whereClause,
-      orderBy: { recordedAt: 'desc' }, // Default sort: data terbaru [cite: 22]
+      orderBy: { recordedAt: 'desc' },
     });
   }
 

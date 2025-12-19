@@ -10,6 +10,9 @@ export class CreateCityDto {
   @IsNotEmpty()
   stationName: string; 
 
+  @IsNotEmpty()
+  uid: number; 
+
   @ApiProperty({
     example: 'jakarta', // <--- Ini yang muncul di Swagger
     description: 'Keyword slug yang valid untuk API WAQI (waqi.info)',

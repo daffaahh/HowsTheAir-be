@@ -10,8 +10,9 @@ datasource db {
 // Master Data: Daftar Stasiun yang dipantau
 model MonitoredCity {
   id          Int      @id @default(autoincrement())
+  uid         Int      @unique
   stationName String   // Dulu 'name', sekarang jadi label stasiun
-  keyword     String   @unique // UID/Keyword untuk API WAQI
+  keyword     String   
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
