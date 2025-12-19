@@ -19,7 +19,7 @@ export class AirQualityController {
   }
 
   @Get('history')
-  getHistory(@Query() query: any) {
+  getHistory(@Query() query: { startDate?: string; endDate?: string }) {
     return this.airQualityService.findHistory(query);
   }
 

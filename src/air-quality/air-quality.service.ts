@@ -163,18 +163,24 @@ private readonly logger = new Logger(AirQualityService.name);
     return 'Hazardous';
   }
 
-  async findHistory(query: any) {
+  async findHistory(query: { startDate?: string; endDate?: string }) {
     const { startDate, endDate } = query;
-    const whereClause: Prisma.AirQualityHistoryWhereInput = {};
+    
+    // 1. Base Filter: Hanya ambil data dari stasiun yang AKTIF
+    const whereClause: Prisma.AirQualityHistoryWhereInput = {
+      monitoredCity: {
+        isActive: true 
+      }
+    };
 
-    // 1. Logic Filter Tanggal (Sesuai PDF Point 6 [cite: 36])
+    // 2. Logic Filter Tanggal
     if (startDate && endDate) {
       whereClause.recordedAt = {
-        gte: new Date(startDate), // Greater than or Equal (Mulai dari)
-        lte: new Date(endDate),   // Less than or Equal (Sampai dengan)
+        gte: new Date(startDate), // >= Start Date
+        lte: new Date(endDate),   // <= End Date
       };
     } else {
-      // 2. Default Requirement: Data ditampilkan untuk 1 bulan terakhir 
+      // Default: Jika tidak ada filter, ambil 30 hari terakhir
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       
@@ -185,18 +191,11 @@ private readonly logger = new Logger(AirQualityService.name);
 
     return this.prisma.airQualityHistory.findMany({
       where: whereClause,
-      // 3. Include Relasi agar FE dapat nama stasiun (stationName)
       include: {
-        monitoredCity: {
-          select: {
-            stationName: true,
-            keyword: true
-          }
-        }
+        monitoredCity: true, // Sertakan info stasiun
       },
-      // 4. Sort Ascending (Lama -> Baru) supaya grafik timeline urut
       orderBy: {
-        recordedAt: 'asc',
+        recordedAt: 'asc', // Urutkan Lama -> Baru (Penting untuk Grafik Garis/Bar)
       },
     });
   }
