@@ -18,7 +18,6 @@ private readonly logger = new Logger(AirQualityService.name);
   ) {}
 
   async syncData() {
-    // 1. Ambil list stasiun aktif
     const stations = await this.prisma.monitoredCity.findMany({
       where: { isActive: true },
     });
@@ -39,11 +38,8 @@ private readonly logger = new Logger(AirQualityService.name);
           const category = this.determineCategory(data.aqi);
           const recordDate = new Date(data.time.iso); 
 
-          // TRANSACTION: Double Upsert
           await this.prisma.$transaction([
             
-            // A. Upsert ke AirQuality (Snapshot)
-            // HAPUS 'stationName' dari sini karena kolomnya sudah tidak ada di schema
             this.prisma.airQuality.upsert({
               where: { monitoredCityId: station.id }, 
               update: {
@@ -60,8 +56,6 @@ private readonly logger = new Logger(AirQualityService.name);
               },
             }),
 
-            // B. Upsert ke History (Log)
-            // Tetap gunakan logic unique constraints untuk hindari duplikasi [cite: 18]
             this.prisma.airQualityHistory.upsert({
               where: {
                 monitoredCityId_recordedAt: { 
@@ -83,10 +77,16 @@ private readonly logger = new Logger(AirQualityService.name);
         } 
       } catch (error) {
         this.logger.error(`Error syncing ${station.stationName}`, error);
+       await this.prisma.auditLog.create({
+        data: { 
+        action: 'SYNC', 
+        status: 'FAILED', 
+        details: `Failed, Synced 0 stations.` 
+      }
+    });
       }
     }
 
-    // Log hasil sync
     await this.prisma.auditLog.create({
       data: { 
         action: 'SYNC', 
@@ -101,14 +101,12 @@ private readonly logger = new Logger(AirQualityService.name);
   async findAll(query: any) {
     const { startDate, endDate, search } = query;
     
-    // 1. Base Condition: HANYA ambil data dari stasiun yang AKTIF
     const whereClause: Prisma.AirQualityWhereInput = {
       monitoredCity: {
         isActive: true
       }
     };
 
-    // 2. Filter Tanggal (Jika ada)
     if (startDate && endDate) {
       whereClause.recordedAt = {
         gte: new Date(startDate),
@@ -116,9 +114,7 @@ private readonly logger = new Logger(AirQualityService.name);
       };
     }
 
-    // 3. Filter Search (Server-side)
     if (search) {
-      // Note: Prisma akan menganggap kondisi di atas (isActive) AND kondisi di bawah (OR)
       whereClause.OR = [
         {
           monitoredCity: {
@@ -145,7 +141,6 @@ private readonly logger = new Logger(AirQualityService.name);
     });
   }
 
-  // Ambil data log terakhir buat ditampilkan di tombol Sync
   async getLastSync() {
     return this.prisma.auditLog.findFirst({
       where: { action: 'SYNC', status: 'SUCCESS' }, // Filter cuma yang Sync
@@ -153,7 +148,6 @@ private readonly logger = new Logger(AirQualityService.name);
     });
   }
 
-  // --- HELPER: Kategori Polusi ---
   private determineCategory(aqi: number): string {
     if (aqi <= 50) return 'Good';
     if (aqi <= 100) return 'Moderate';
@@ -167,27 +161,21 @@ private readonly logger = new Logger(AirQualityService.name);
     const { startDate, endDate, cityId } = query;
     
     const whereClause: Prisma.AirQualityHistoryWhereInput = {
-      // Base: Defaultnya ambil yang active, TAPI jika user minta spesifik ID (history view), 
-      // kita bisa abaikan status active/inactive atau tetap enforce. 
-      // Di sini kita tetap enforce active stasiun.
       monitoredCity: {
         isActive: true 
       }
     };
 
-    // --- LOGIC BARU: Filter by Specific City ID ---
     if (cityId) {
       whereClause.monitoredCityId = Number(cityId); // Pastikan convert ke Number
     }
 
-    // Logic Date Filter (Tetap sama)
     if (startDate && endDate) {
       whereClause.recordedAt = {
         gte: new Date(startDate),
         lte: new Date(endDate),
       };
     } else {
-      // Default 30 hari (Tetap sama)
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       
@@ -201,7 +189,6 @@ private readonly logger = new Logger(AirQualityService.name);
       include: {
         monitoredCity: true,
       },
-      // Sort Descending (Terbaru paling atas) lebih enak dibaca untuk list history
       orderBy: {
         recordedAt: 'desc', 
       },

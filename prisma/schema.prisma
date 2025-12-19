@@ -7,22 +7,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Master Data: Daftar Stasiun yang dipantau
 model MonitoredCity {
   id          Int      @id @default(autoincrement())
   uid         Int      @unique
-  stationName String   // Dulu 'name', sekarang jadi label stasiun
-  keyword     String   
+  stationName String   
+  keyword     String   @unique 
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relasi: Satu stasiun punya 1 data terkini, dan banyak history
   currentAirQuality AirQuality? 
   history           AirQualityHistory[]
 }
 
-// Data Snapshot: Hanya menyimpan state TERAKHIR (Real-time)
 model AirQuality {
   id              Int           @id @default(autoincrement())
   // stationName DIHAPUS, kita ambil dari relasi monitoredCity
@@ -36,11 +33,10 @@ model AirQuality {
   lastSynced      DateTime      @default(now()) @updatedAt
 }
 
-// Data History: Log perjalanan kualitas udara (Time-series)
 model AirQualityHistory {
   id              Int           @id @default(autoincrement())
   
-  monitoredCityId Int           // Foreign Key (Bisa banyak record)
+  monitoredCityId Int           
   monitoredCity   MonitoredCity @relation(fields: [monitoredCityId], references: [id])
   
   aqi             Int
@@ -48,7 +44,6 @@ model AirQualityHistory {
   recordedAt      DateTime
   SyncedAt        DateTime      @default(now())
 
-  // Mencegah duplikasi history di jam yang sama untuk kota yang sama
   @@unique([monitoredCityId, recordedAt])
 }
 

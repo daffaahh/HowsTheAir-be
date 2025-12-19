@@ -3,7 +3,6 @@ import { CreateAirQualityDto } from './create-air-quality.dto';
 
 export class UpdateAirQualityDto extends PartialType(CreateAirQualityDto) {}
 
-// Interface untuk hasil olahan yang akan kita return
 export interface AirQualityResult {
   monitoredCityId: number;
   cityName: string;
@@ -18,7 +17,6 @@ export interface AirQualityResult {
   error?: string;
 }
 
-// Interface untuk Response dari API WAQI (Sesuai JSON kamu)
 export interface WaqiApiResponse {
   status: string;
   data: {
@@ -26,7 +24,7 @@ export interface WaqiApiResponse {
     aqi: number;
     time: {
       v: number;
-      s: string; // "2016-12-10 19:00:00"
+      s: string;
       tz: string;
     };
     city: {

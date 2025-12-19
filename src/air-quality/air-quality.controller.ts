@@ -1,4 +1,3 @@
-// src/air-quality/air-quality.controller.ts
 import { Controller, Get, Post, Query } from '@nestjs/common';
 import { AirQualityService } from './air-quality.service';
 

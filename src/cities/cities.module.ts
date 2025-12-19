@@ -5,7 +5,7 @@ import { HttpModule } from '@nestjs/axios';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Module({
-  imports: [HttpModule], // Masukkan HttpModule di sini
+  imports: [HttpModule], 
   controllers: [CitiesController],
   providers: [CitiesService, PrismaService],
 })

@@ -1,13 +1,12 @@
-// src/air-quality/air-quality.module.ts
 import { Module } from '@nestjs/common';
-import { HttpModule } from '@nestjs/axios'; // Import ini
+import { HttpModule } from '@nestjs/axios';
 import { AirQualityService } from './air-quality.service';
 import { AirQualityController } from './air-quality.controller';
-import { PrismaService } from '../prisma/prisma.service'; // Import ini
+import { PrismaService } from '../prisma/prisma.service'; 
 
 @Module({
-  imports: [HttpModule], // Masukkan HttpModule di sini
+  imports: [HttpModule], 
   controllers: [AirQualityController],
-  providers: [AirQualityService, PrismaService], // Masukkan PrismaService di sini
+  providers: [AirQualityService, PrismaService],
 })
 export class AirQualityModule {}
